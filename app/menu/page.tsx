@@ -1,6 +1,6 @@
-import Header from "./components/Header";
+import Header from "../components/Header";
 import Image from "next/image";
-import styles from "./page.module.css"; // "from" です！
+import styles from "../page.module.css"; // "from" です！
 
 export default function Home() {
   return (
