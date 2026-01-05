@@ -1,9 +1,10 @@
 import Link from "next/link"; // ← ここに書く！
 import Image from "next/image";
+import styles from "./Header.module.css"; // "from" です！
 
 export default function Home() {
   return (
-    <header>
+    <header className={styles.header}>
       <Image
         className="dark:invert"
         src="/shop_manager.png"
@@ -13,8 +14,12 @@ export default function Home() {
         priority
       />
       <nav>
-        {/* text-sm を text-2xl に変更、gap-6 を gap-10 に広げて調整 */}
-        <ul className="flex gap-10 text-2xl font-bold text-gray-700">
+        {/* text-base: スマホでは16px
+    md:text-2xl: 画面が広くなったら24px
+    gap-4: スマホでは少し狭く
+    md:gap-10: PCでは広く
+  */}
+        <ul className="flex gap-4 md:gap-10 text-base md:text-2xl font-bold text-gray-700">
           <li>
             <Link href="/" className="hover:text-blue-600">
               お会計
