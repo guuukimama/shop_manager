@@ -116,8 +116,8 @@ export default function StatsPage() {
 
   if (loading)
     return (
-      <div className="min-h-screen bg-zinc-50 dark:bg-black flex items-center justify-center font-bold">
-        読み込み中...
+      <div className="min-h-screen bg-zinc-50 dark:bg-black flex items-center justify-center font-bold italic">
+        データを読み込み中...
       </div>
     );
 
@@ -137,7 +137,7 @@ export default function StatsPage() {
           </div>
           <input
             type="date"
-            className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-4 py-2 rounded-2xl text-sm font-bold shadow-sm outline-none"
+            className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-4 py-2 rounded-2xl text-sm font-bold"
             onChange={(e) =>
               e.target.value &&
               setSelectedDate(
@@ -151,7 +151,7 @@ export default function StatsPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
           <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border-2 border-blue-500 shadow-xl">
             <p className="text-xs font-bold text-blue-500 mb-1">
-              {selectedDate === todayStr ? "今日" : selectedDate} の売上合計
+              {selectedDate === todayStr ? "今日" : selectedDate} の売上額
             </p>
             <p className="text-4xl font-black italic">
               ¥{selectedDayStats.revenue.toLocaleString()}
@@ -160,8 +160,7 @@ export default function StatsPage() {
           <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
             <p className="text-xs font-bold text-zinc-400 mb-1">来店数</p>
             <p className="text-4xl font-black text-emerald-500">
-              {selectedDayStats.count}{" "}
-              <span className="text-sm font-bold text-zinc-400">名</span>
+              {selectedDayStats.count} <span className="text-sm">人</span>
             </p>
           </div>
           <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
@@ -174,9 +173,9 @@ export default function StatsPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <section className="lg:col-span-1 space-y-8">
-            {/* 時間帯別グラフ：型エラーを (data: any) で回避 */}
+            {/* 時間帯別グラフ */}
             <div>
-              <h2 className="text-xs font-bold text-zinc-400 mb-4 uppercase tracking-widest">
+              <h2 className="text-xs font-bold text-zinc-400 mb-4 uppercase tracking-widest text-nowrap">
                 時間帯別の来店状況 (0時-23時)
               </h2>
               <div className="h-[200px] w-full bg-white dark:bg-zinc-900 p-4 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
@@ -211,6 +210,7 @@ export default function StatsPage() {
                       fill="#10b981"
                       radius={[2, 2, 0, 0]}
                       onClick={(data: any) =>
+                        data &&
                         setSelectedHourDetail({
                           hour: `${data.hour}時`,
                           sales: daySales.filter(
@@ -226,15 +226,15 @@ export default function StatsPage() {
               </div>
             </div>
 
-            {/* 月別売上比較（日本語化＆はみ出し防止） */}
+            {/* 月別売上比較 */}
             <div>
               <div className="flex justify-between items-center mb-4 px-1">
-                <h2 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                <h2 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest text-nowrap">
                   月別売上比較 (昨年 vs 今年)
                 </h2>
                 <div className="flex gap-2 text-[8px] font-black">
-                  <span className="text-purple-600">● 2026年</span>
-                  <span className="text-zinc-300">● 2025年</span>
+                  <span className="text-purple-600">● 2026</span>
+                  <span className="text-zinc-300">● 2025</span>
                 </div>
               </div>
               <div className="h-[220px] w-full bg-white dark:bg-zinc-900 p-4 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
@@ -279,17 +279,17 @@ export default function StatsPage() {
               </div>
             </div>
 
-            {/* 当日の販売内訳（日本語化） */}
+            {/* 販売内訳 */}
             <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
               <div className="p-4 border-b dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 flex justify-between">
-                <h2 className="font-bold text-xs">商品別 販売数</h2>
+                <h2 className="font-bold text-xs uppercase">商品別 販売数</h2>
               </div>
               <div className="max-h-[250px] overflow-y-auto">
                 {selectedDayStats.itemAnalysis.length > 0 ? (
                   selectedDayStats.itemAnalysis.map(([name, info]: any) => (
                     <div
                       key={name}
-                      className="p-4 border-b last:border-0 dark:border-zinc-800 flex justify-between items-center hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                      className="p-4 border-b last:border-0 dark:border-zinc-800 flex justify-between items-center"
                     >
                       <span className="font-bold text-xs">
                         {info.emoji} {name}
@@ -300,15 +300,15 @@ export default function StatsPage() {
                     </div>
                   ))
                 ) : (
-                  <p className="p-8 text-center text-zinc-400 text-[10px] font-bold italic">
-                    本日の売上データはありません
+                  <p className="p-8 text-center text-zinc-400 text-[10px] font-bold">
+                    本日のデータなし
                   </p>
                 )}
               </div>
             </div>
           </section>
 
-          {/* 右セクション（日本語化） */}
+          {/* 右：30日間売上 & 履歴 */}
           <section className="lg:col-span-2 space-y-8">
             <div className="bg-white dark:bg-zinc-900 p-8 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
               <h2 className="text-xs font-bold mb-6 text-zinc-400 uppercase tracking-widest italic font-black">
@@ -316,9 +316,10 @@ export default function StatsPage() {
               </h2>
               <div className="h-[320px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
+                  {/* ここの型定義を any に変更してビルドエラーを回避 */}
                   <BarChart
                     data={dailyData}
-                    onClick={(data) =>
+                    onClick={(data: any) =>
                       data?.activePayload &&
                       setSelectedDate(data.activePayload[0].payload.fullDate)
                     }
@@ -361,10 +362,11 @@ export default function StatsPage() {
               </div>
             </div>
 
-            {/* 取引履歴（日本語化） */}
             <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
-              <div className="p-4 border-b dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
-                <h2 className="font-bold text-xs">最近の注文履歴</h2>
+              <div className="p-4 border-b dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 flex justify-between">
+                <h2 className="font-bold text-xs uppercase tracking-tight">
+                  注文履歴 (直近10件)
+                </h2>
               </div>
               {sales.slice(0, 10).map((sale) => (
                 <div
@@ -375,23 +377,23 @@ export default function StatsPage() {
                     onClick={() =>
                       setOpenId(openId === sale.id ? null : sale.id)
                     }
-                    className="w-full p-4 flex justify-between items-center hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
+                    className="w-full p-4 flex justify-between items-center hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
                   >
                     <div className="text-left">
                       <p className="font-bold text-[10px]">
                         {new Date(sale.created_at).toLocaleString("ja-JP")}
                       </p>
-                      <p className="text-[9px] text-zinc-400 font-black">
-                        店頭販売 / {sale.items?.length || 0}点
+                      <p className="text-[9px] text-zinc-400 font-black uppercase">
+                        店頭販売 / {sale.items?.length || 0} ITEMS
                       </p>
                     </div>
-                    <p className="font-black text-sm">
+                    <p className="font-black text-sm text-zinc-800 dark:text-zinc-100">
                       ¥{sale.total.toLocaleString()}
                     </p>
                   </button>
                   {openId === sale.id && (
                     <div className="px-4 pb-4 animate-in slide-in-from-top-1">
-                      <div className="bg-zinc-50 dark:bg-zinc-800 p-4 rounded-2xl border border-zinc-100 dark:border-zinc-700">
+                      <div className="bg-zinc-50 dark:bg-zinc-800 p-4 rounded-2xl">
                         {sale.items?.map((item: any, idx: number) => (
                           <div
                             key={idx}
@@ -400,7 +402,7 @@ export default function StatsPage() {
                             <span>
                               {item.emoji} {item.name}
                             </span>
-                            <span className="font-bold font-mono">
+                            <span className="font-bold">
                               ¥{item.price.toLocaleString()}
                             </span>
                           </div>
@@ -415,16 +417,16 @@ export default function StatsPage() {
         </div>
       </main>
 
-      {/* 詳細モーダル（日本語化） */}
+      {/* 詳細モーダル */}
       {selectedHourDetail && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-300">
           <div className="bg-white dark:bg-zinc-900 w-full max-w-md rounded-[40px] p-8 shadow-2xl border border-zinc-200 dark:border-zinc-800">
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h3 className="text-xl font-black italic">
                   {selectedHourDetail.hour} の詳細内訳
                 </h3>
-                <p className="text-[10px] text-zinc-400 font-bold">
+                <p className="text-[10px] text-zinc-400 font-bold uppercase">
                   {selectedDate}
                 </p>
               </div>
@@ -442,9 +444,11 @@ export default function StatsPage() {
                     key={i}
                     className="p-4 bg-zinc-50 dark:bg-zinc-800 rounded-2xl border border-zinc-100 dark:border-zinc-700"
                   >
-                    <div className="flex justify-between text-[9px] font-black text-blue-600 mb-2">
+                    <div className="flex justify-between text-[10px] font-black text-blue-600 mb-2 border-b border-zinc-100 dark:border-zinc-700 pb-2">
                       <span>伝票 #{i + 1}</span>
-                      <span>¥{sale.total.toLocaleString()}</span>
+                      <span className="text-sm">
+                        ¥{sale.total.toLocaleString()}
+                      </span>
                     </div>
                     <div className="space-y-1 mt-2">
                       {sale.items?.map((item: any, j: number) => (
@@ -465,13 +469,13 @@ export default function StatsPage() {
                 ))
               ) : (
                 <p className="text-center py-10 text-zinc-400 font-bold italic text-sm">
-                  注文はありませんでした
+                  該当時間の注文はありません
                 </p>
               )}
             </div>
             <button
               onClick={() => setSelectedHourDetail(null)}
-              className="w-full mt-6 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 py-4 rounded-2xl font-black transition-transform active:scale-95"
+              className="w-full mt-6 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 py-4 rounded-2xl font-black"
             >
               閉じる
             </button>
