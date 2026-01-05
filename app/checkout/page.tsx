@@ -82,7 +82,7 @@ export default function CheckoutPage() {
           </div>
 
           {/* カテゴリータブ */}
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+          <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 scrollbar-hide">
             {categories.map((cat) => (
               <button
                 key={cat}

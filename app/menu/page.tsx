@@ -38,16 +38,14 @@ export default function MenuManagementPage() {
   const addItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName || !newPrice) return;
-    const { error } = await supabase
-      .from("items")
-      .insert([
-        {
-          name: newName,
-          price: parseInt(newPrice),
-          category: newCategory,
-          emoji: newEmoji,
-        },
-      ]);
+    const { error } = await supabase.from("items").insert([
+      {
+        name: newName,
+        price: parseInt(newPrice),
+        category: newCategory,
+        emoji: newEmoji,
+      },
+    ]);
     if (!error) {
       setNewName("");
       setNewPrice("");
@@ -124,7 +122,7 @@ export default function MenuManagementPage() {
         </form>
 
         {/* カテゴリー切り替え */}
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
+        <div className="flex flex-wrap gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
           {categories.map((cat) => (
             <button
               key={cat}

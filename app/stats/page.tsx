@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
 import Header from "../components/Header";
-import { supabase } from "@/lib/supabaseClient"; // インポートを追加
+import { supabase } from "@/lib/supabaseClient";
 import {
   BarChart,
   Bar,
@@ -14,19 +14,18 @@ import {
 
 export default function StatsPage() {
   const [sales, setSales] = useState<any[]>([]);
-  const [openId, setOpenId] = useState<string | null>(null); // SupabaseのIDはuuid（文字列）なのでstringに変更
+  const [openId, setOpenId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchSales();
   }, []);
 
-  // 1. Supabaseから売上データを取得
   async function fetchSales() {
     const { data, error } = await supabase
       .from("sales")
       .select("*")
-      .order("created_at", { ascending: false }); // 新しい順に取得
+      .order("created_at", { ascending: false });
 
     if (error) {
       console.error("売上データの取得に失敗しました:", error);
@@ -36,7 +35,7 @@ export default function StatsPage() {
     setLoading(false);
   }
 
-  // --- 集計ロジック (Supabaseのcreated_atに対応) ---
+  // 今日の統計
   const todayStats = useMemo(() => {
     const today = new Date().toLocaleDateString();
     const todaySales = sales.filter(
@@ -48,6 +47,7 @@ export default function StatsPage() {
     return { revenue, count, average };
   }, [sales]);
 
+  // 【重要】時間帯別データ
   const hourlyData = useMemo(() => {
     const hours = Array.from({ length: 24 }, (_, i) => ({
       hour: `${i}時`,
@@ -60,6 +60,7 @@ export default function StatsPage() {
     return hours;
   }, [sales]);
 
+  // 30日間の推移データ
   const chartData = useMemo(() => {
     const last30Days = [...Array(30)].map((_, i) => {
       const d = new Date();
@@ -84,7 +85,7 @@ export default function StatsPage() {
       });
       months[month] = (months[month] || 0) + s.total;
     });
-    return Object.entries(months); // 降順で取得しているのでそのまま表示
+    return Object.entries(months);
   }, [sales]);
 
   const toggleDetail = (id: string) => setOpenId(openId === id ? null : id);
@@ -114,7 +115,7 @@ export default function StatsPage() {
           </button>
         </div>
 
-        {/* 今日のサマリー */}
+        {/* サマリーカード */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
           <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800">
             <p className="text-sm font-bold text-zinc-400 uppercase tracking-widest">
@@ -144,12 +145,13 @@ export default function StatsPage() {
 
         {/* グラフエリア */}
         <div className="flex flex-col gap-8 mb-10">
+          {/* 売上推移グラフ */}
           <section className="bg-white dark:bg-zinc-900 p-8 rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800">
             <h2 className="text-lg font-bold mb-6 flex items-center gap-2">
               <span className="w-2 h-6 bg-blue-600 rounded-full"></span>
               売上推移 (直近30日間)
             </h2>
-            <div className="h-[350px] w-full">
+            <div className="h-[300px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData}>
                   <CartesianGrid
@@ -181,9 +183,49 @@ export default function StatsPage() {
               </ResponsiveContainer>
             </div>
           </section>
+
+          {/* 時間帯別来店数グラフ（ここを復活させました！） */}
+          <section className="bg-white dark:bg-zinc-900 p-8 rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800">
+            <h2 className="text-lg font-bold mb-6 flex items-center gap-2">
+              <span className="w-2 h-6 bg-emerald-500 rounded-full"></span>
+              時間帯別・来店数
+            </h2>
+            <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={hourlyData}>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="#f3f4f6"
+                  />
+                  <XAxis
+                    dataKey="hour"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10 }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, fill: "#9ca3af" }}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    cursor={{ fill: "#f0fdf4" }}
+                    contentStyle={{
+                      borderRadius: "16px",
+                      border: "none",
+                      boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)",
+                    }}
+                  />
+                  <Bar dataKey="count" fill="#10b981" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
         </div>
 
-        {/* 月別集計と履歴 */}
+        {/* 月別合計 & 取引履歴 */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
           <div className="lg:col-span-1">
             <h2 className="text-xl font-bold mb-4">月別合計</h2>
