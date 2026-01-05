@@ -66,7 +66,7 @@ export default function SettingsPage() {
 
       <main className="flex-1 max-w-4xl mx-auto w-full p-6 pb-20">
         <header className="mb-10">
-          <h1 className="text-3xl font-bold dark:text-white">Settings</h1>
+          <h1 className="text-3xl font-bold dark:text-white">設定</h1>
           <p className="text-zinc-500 mt-1 font-medium">
             アプリ全体の基本設定を行います
           </p>

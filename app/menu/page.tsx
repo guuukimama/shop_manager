@@ -1,138 +1,113 @@
 "use client";
 import { useState, useEffect } from "react";
 import Header from "../components/Header";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function MenuManagementPage() {
   const [items, setItems] = useState<any[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
-
   const [newName, setNewName] = useState("");
   const [newPrice, setNewPrice] = useState("");
   const [newCategory, setNewCategory] = useState("");
-  const [newEmoji, setNewEmoji] = useState("🍴"); // デフォルト絵文字
+  const [newEmoji, setNewEmoji] = useState("🍴");
   const [activeCategory, setActiveCategory] = useState("");
-
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editPrice, setEditPrice] = useState("");
-  const [editCategory, setEditCategory] = useState("");
-  const [editEmoji, setEditEmoji] = useState("");
-
-  // カテゴリーに応じた初期絵文字を返す関数
-  const getDefaultEmoji = (cat: string) => {
-    if (cat.includes("ドリンク") || cat.includes("飲み物")) return "🥤";
-    if (cat.includes("デザート") || cat.includes("スイーツ")) return "🍰";
-    if (cat.includes("サイド") || cat.includes("つまみ")) return "🍟";
-    if (cat.includes("メイン") || cat.includes("定食")) return "🍱";
-    if (cat.includes("麺")) return "🍜";
-    if (cat.includes("飯")) return "🍛";
-    return "🍴"; // どれにも当てはまらない場合
-  };
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
-    const savedItems = localStorage.getItem("shop_items");
-    if (savedItems) setItems(JSON.parse(savedItems));
-
+    fetchItems();
     const savedCats = localStorage.getItem("shop_categories");
     const parsedCats = savedCats
       ? JSON.parse(savedCats)
       : ["メイン", "サイド", "ドリンク", "デザート"];
     setCategories(parsedCats);
-
     if (parsedCats.length > 0) {
       setActiveCategory(parsedCats[0]);
       setNewCategory(parsedCats[0]);
-      setNewEmoji(getDefaultEmoji(parsedCats[0])); // 初期絵文字セット
     }
   }, []);
 
-  // カテゴリー選択が変わったら絵文字も自動提案
-  const handleCategoryChange = (cat: string) => {
-    setNewCategory(cat);
-    setNewEmoji(getDefaultEmoji(cat));
-  };
+  async function fetchItems() {
+    const { data, error } = await supabase
+      .from("items")
+      .select("*")
+      .order("created_at", { ascending: true });
+    if (!error) setItems(data || []);
+  }
 
-  const saveToStorage = (newItems: any[]) => {
-    setItems(newItems);
-    localStorage.setItem("shop_items", JSON.stringify(newItems));
-  };
-
-  const addItem = (e: React.FormEvent) => {
+  // --- 追加 ---
+  const addItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName || !newPrice) return;
-    const newItem = {
-      id: Date.now(),
-      name: newName,
-      price: parseInt(newPrice),
-      category: newCategory,
-      emoji: newEmoji, // 選択（または自動セット）された絵文字
-    };
-    saveToStorage([...items, newItem]);
-    setNewName("");
-    setNewPrice("");
+    const { error } = await supabase
+      .from("items")
+      .insert([
+        {
+          name: newName,
+          price: parseInt(newPrice),
+          category: newCategory,
+          emoji: newEmoji,
+        },
+      ]);
+    if (!error) {
+      setNewName("");
+      setNewPrice("");
+      fetchItems();
+    }
   };
 
-  const startEditing = (item: any) => {
-    setEditingId(item.id);
-    setEditName(item.name);
-    setEditPrice(item.price.toString());
-    setEditCategory(item.category);
-    setEditEmoji(item.emoji);
+  // --- 更新 (編集) ---
+  const updateItem = async (id: string, updates: any) => {
+    const { error } = await supabase.from("items").update(updates).eq("id", id);
+    if (!error) {
+      setEditingId(null);
+      fetchItems();
+    } else {
+      alert("更新に失敗しました");
+    }
   };
 
-  const saveEdit = (id: number) => {
-    const updatedItems = items.map((item) =>
-      item.id === id
-        ? {
-            ...item,
-            name: editName,
-            price: parseInt(editPrice),
-            category: editCategory,
-            emoji: editEmoji,
-          }
-        : item
-    );
-    saveToStorage(updatedItems);
-    setEditingId(null);
+  // --- 削除 ---
+  const deleteItem = async (id: string) => {
+    if (!confirm("この商品を削除してもよろしいですか？")) return;
+    const { error } = await supabase.from("items").delete().eq("id", id);
+    if (!error) fetchItems();
   };
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black font-sans text-zinc-900 dark:text-white pb-20">
       <Header />
       <main className="max-w-4xl mx-auto p-6">
-        <h1 className="text-3xl font-bold mb-8">メニュー管理</h1>
+        <h1 className="text-3xl font-bold mb-8">メニュー設定</h1>
 
-        {/* 登録フォーム */}
+        {/* 新規登録フォーム */}
         <form
           onSubmit={addItem}
           className="bg-white dark:bg-zinc-900 p-6 rounded-3xl shadow-sm flex flex-wrap gap-4 border border-zinc-200 dark:border-zinc-800 mb-12"
         >
-          {/* 絵文字選択 */}
           <input
             type="text"
             className="w-14 p-3 border rounded-xl dark:bg-zinc-800 dark:border-zinc-700 text-center text-xl"
             value={newEmoji}
             onChange={(e) => setNewEmoji(e.target.value)}
-            title="絵文字を入力"
           />
           <input
             type="text"
             placeholder="商品名"
-            className="flex-1 min-w-[200px] p-3 border rounded-xl dark:bg-zinc-800 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 min-w-[200px] p-3 border rounded-xl dark:bg-zinc-800 dark:border-zinc-700 outline-none"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
           />
           <input
             type="number"
             placeholder="価格"
-            className="w-32 p-3 border rounded-xl dark:bg-zinc-800 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-32 p-3 border rounded-xl dark:bg-zinc-800 dark:border-zinc-700 outline-none"
             value={newPrice}
             onChange={(e) => setNewPrice(e.target.value)}
           />
           <select
-            className="p-3 border rounded-xl dark:bg-zinc-800 dark:border-zinc-700 font-bold outline-none"
+            className="p-3 border rounded-xl dark:bg-zinc-800 dark:border-zinc-700 font-bold"
             value={newCategory}
-            onChange={(e) => handleCategoryChange(e.target.value)}
+            onChange={(e) => setNewCategory(e.target.value)}
           >
             {categories.map((c) => (
               <option key={c} value={c}>
@@ -142,126 +117,124 @@ export default function MenuManagementPage() {
           </select>
           <button
             type="submit"
-            className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 dark:shadow-none"
+            className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700"
           >
-            追加
+            登録する
           </button>
         </form>
 
-        {/* カテゴリー別表示タブ */}
+        {/* カテゴリー切り替え */}
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
           {categories.map((cat) => (
             <button
               key={cat}
               onClick={() => setActiveCategory(cat)}
-              className={`px-6 py-2 rounded-full font-bold text-sm transition-all whitespace-nowrap ${
+              className={`px-6 py-2 rounded-full font-bold text-sm transition-all ${
                 activeCategory === cat
-                  ? "bg-zinc-900 text-white dark:bg-white dark:text-black shadow-md"
-                  : "bg-white text-zinc-500 border border-zinc-200 dark:bg-zinc-900 dark:border-zinc-800"
+                  ? "bg-blue-600 text-white shadow-md"
+                  : "bg-white text-zinc-500 border dark:bg-zinc-900 dark:border-zinc-800"
               }`}
             >
-              {cat} ({items.filter((i) => i.category === cat).length})
+              {cat}
             </button>
           ))}
         </div>
 
-        {/* リスト表示 */}
+        {/* 商品リスト */}
         <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-          {items.filter((i) => i.category === activeCategory).length > 0 ? (
-            items
-              .filter((i) => i.category === activeCategory)
-              .map((item) => (
-                <div
-                  key={item.id}
-                  className="p-5 border-b last:border-0 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
-                >
+          {items
+            .filter((i) => i.category === activeCategory)
+            .map((item) => (
+              <div
+                key={item.id}
+                className="p-5 border-b last:border-0 dark:border-zinc-800 flex justify-between items-center group"
+              >
+                <div className="flex items-center gap-4 flex-1">
+                  <span className="text-3xl bg-zinc-100 dark:bg-zinc-800 w-12 h-12 flex items-center justify-center rounded-2xl">
+                    {item.emoji}
+                  </span>
+
                   {editingId === item.id ? (
-                    <div className="flex flex-wrap gap-3 items-center">
+                    /* 編集モード */
+                    <div className="flex flex-wrap gap-2 flex-1">
                       <input
-                        type="text"
-                        className="w-12 p-2 border rounded-lg dark:bg-zinc-800"
-                        value={editEmoji}
-                        onChange={(e) => setEditEmoji(e.target.value)}
-                      />
-                      <input
-                        type="text"
-                        className="flex-1 min-w-[150px] p-2 border rounded-lg dark:bg-zinc-800"
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
+                        autoFocus
+                        className="border p-2 rounded-lg dark:bg-zinc-800 text-sm"
+                        value={item.name}
+                        onChange={(e) =>
+                          setItems(
+                            items.map((i) =>
+                              i.id === item.id
+                                ? { ...i, name: e.target.value }
+                                : i
+                            )
+                          )
+                        }
                       />
                       <input
                         type="number"
-                        className="w-24 p-2 border rounded-lg dark:bg-zinc-800 font-bold text-blue-600"
-                        value={editPrice}
-                        onChange={(e) => setEditPrice(e.target.value)}
+                        className="border p-2 rounded-lg dark:bg-zinc-800 text-sm w-24"
+                        value={item.price}
+                        onChange={(e) =>
+                          setItems(
+                            items.map((i) =>
+                              i.id === item.id
+                                ? { ...i, price: parseInt(e.target.value) }
+                                : i
+                            )
+                          )
+                        }
                       />
-                      <select
-                        className="p-2 border rounded-lg dark:bg-zinc-800"
-                        value={editCategory}
-                        onChange={(e) => setEditCategory(e.target.value)}
+                      <button
+                        onClick={() =>
+                          updateItem(item.id, {
+                            name: item.name,
+                            price: item.price,
+                          })
+                        }
+                        className="bg-emerald-500 text-white px-3 py-1 rounded-lg text-xs font-bold"
                       >
-                        {categories.map((c) => (
-                          <option key={c} value={c}>
-                            {c}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => saveEdit(item.id)}
-                          className="bg-emerald-500 text-white px-4 py-2 rounded-lg text-xs font-bold"
-                        >
-                          保存
-                        </button>
-                        <button
-                          onClick={() => setEditingId(null)}
-                          className="bg-zinc-200 dark:bg-zinc-700 px-4 py-2 rounded-lg text-xs font-bold"
-                        >
-                          中止
-                        </button>
-                      </div>
+                        保存
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingId(null);
+                          fetchItems();
+                        }}
+                        className="bg-zinc-200 dark:bg-zinc-700 px-3 py-1 rounded-lg text-xs font-bold"
+                      >
+                        キャンセル
+                      </button>
                     </div>
                   ) : (
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-4">
-                        <span className="text-3xl bg-zinc-100 dark:bg-zinc-800 w-12 h-12 flex items-center justify-center rounded-2xl">
-                          {item.emoji || "🍴"}
+                    /* 通常表示モード */
+                    <div
+                      className="flex-1 cursor-pointer"
+                      onClick={() => setEditingId(item.id)}
+                    >
+                      <p className="font-bold flex items-center gap-2">
+                        {item.name}
+                        <span className="text-[10px] text-zinc-400 font-normal opacity-0 group-hover:opacity-100 transition-opacity">
+                          クリックで編集
                         </span>
-                        <div>
-                          <p className="font-bold">{item.name}</p>
-                          <p className="text-sm font-black text-blue-600">
-                            ¥{item.price.toLocaleString()}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex gap-6">
-                        <button
-                          onClick={() => startEditing(item)}
-                          className="text-zinc-400 hover:text-blue-500 text-xs font-bold uppercase tracking-widest"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (confirm("削除しますか？"))
-                              saveToStorage(
-                                items.filter((i) => i.id !== item.id)
-                              );
-                          }}
-                          className="text-zinc-400 hover:text-red-500 text-xs font-bold uppercase tracking-widest"
-                        >
-                          Delete
-                        </button>
-                      </div>
+                      </p>
+                      <p className="text-sm font-black text-blue-600">
+                        ¥{item.price.toLocaleString()}
+                      </p>
                     </div>
                   )}
                 </div>
-              ))
-          ) : (
-            <p className="p-10 text-center text-zinc-400 italic">
-              このカテゴリーにはまだ商品がありません
-            </p>
-          )}
+
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => deleteItem(item.id)}
+                    className="text-zinc-400 hover:text-red-500 text-xs font-bold"
+                  >
+                    削除する
+                  </button>
+                </div>
+              </div>
+            ))}
         </div>
       </main>
     </div>
