@@ -5,23 +5,23 @@ import styles from "./Header.module.css"; // "from" です！
 export default function Home() {
   return (
     <header className={styles.header}>
-      <Image
-        className="dark:invert"
-        src="/shop_manager.png"
-        alt="shop-manager logo"
-        width={150}
-        height={20}
-        priority
-      />
+      {/* ロゴをLinkで囲んでホーム(TOP)へ戻れるようにする */}
+      <Link href="/">
+        <Image
+          className="dark:invert cursor-pointer"
+          src="/shop_manager.png"
+          alt="shop-manager logo"
+          width={150}
+          height={20}
+          priority
+        />
+      </Link>
+
       <nav>
-        {/* text-base: スマホでは16px
-    md:text-2xl: 画面が広くなったら24px
-    gap-4: スマホでは少し狭く
-    md:gap-10: PCでは広く
-  */}
         <ul className="flex gap-4 md:gap-10 text-base md:text-2xl font-bold text-gray-700">
           <li>
-            <Link href="/" className="hover:text-blue-600">
+            {/* お会計専用のページ /checkout に飛ばす */}
+            <Link href="/checkout" className="hover:text-blue-600">
               お会計
             </Link>
           </li>
