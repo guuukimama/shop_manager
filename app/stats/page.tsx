@@ -10,310 +10,464 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Cell,
 } from "recharts";
 
 export default function StatsPage() {
   const [sales, setSales] = useState<any[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState(
+    new Date().toLocaleDateString("ja-JP")
+  );
+  const [selectedHourDetail, setSelectedHourDetail] = useState<{
+    hour: string;
+    sales: any[];
+  } | null>(null);
 
   useEffect(() => {
     fetchSales();
   }, []);
 
   async function fetchSales() {
+    setLoading(true);
     const { data, error } = await supabase
       .from("sales")
       .select("*")
       .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("売上データの取得に失敗しました:", error);
-    } else {
-      setSales(data || []);
-    }
+    if (!error) setSales(data || []);
     setLoading(false);
   }
 
-  // 今日の統計
-  const todayStats = useMemo(() => {
-    const today = new Date().toLocaleDateString();
-    const todaySales = sales.filter(
-      (s) => new Date(s.created_at).toLocaleDateString() === today
-    );
-    const revenue = todaySales.reduce((sum, s) => sum + s.total, 0);
-    const count = todaySales.length;
-    const average = count > 0 ? Math.floor(revenue / count) : 0;
-    return { revenue, count, average };
-  }, [sales]);
+  const todayStr = new Date().toLocaleDateString("ja-JP");
+  const daySales = useMemo(
+    () =>
+      sales.filter(
+        (s) =>
+          new Date(s.created_at).toLocaleDateString("ja-JP") === selectedDate
+      ),
+    [sales, selectedDate]
+  );
 
-  // 【重要】時間帯別データ
+  // サマリー計算
+  const selectedDayStats = useMemo(() => {
+    const revenue = daySales.reduce((sum, s) => sum + s.total, 0);
+    const count = daySales.length;
+    const itemAnalysis: { [key: string]: { count: number; emoji: string } } =
+      {};
+    daySales.forEach((sale) => {
+      sale.items?.forEach((item: any) => {
+        if (!itemAnalysis[item.name])
+          itemAnalysis[item.name] = { count: 0, emoji: item.emoji || "🍴" };
+        itemAnalysis[item.name].count += 1;
+      });
+    });
+    return {
+      revenue,
+      count,
+      average: count > 0 ? Math.floor(revenue / count) : 0,
+      itemAnalysis: Object.entries(itemAnalysis),
+    };
+  }, [daySales]);
+
+  // 時間帯別（24時間すべて表示・文字サイズ調整）
   const hourlyData = useMemo(() => {
-    const hours = Array.from({ length: 24 }, (_, i) => ({
-      hour: `${i}時`,
-      count: 0,
+    return Array.from({ length: 24 }, (_, i) => {
+      const filtered = daySales.filter(
+        (s) => new Date(s.created_at).getHours() === i
+      );
+      return { hour: `${i}`, count: filtered.length, rawHour: i };
+    });
+  }, [daySales]);
+
+  // 月別比較（1月〜12月を確実に生成）
+  const monthlyComparisonData = useMemo(() => {
+    const months = Array.from({ length: 12 }, (_, i) => ({
+      month: `${i + 1}`,
+      今年: 0,
+      去年: 0,
     }));
     sales.forEach((sale) => {
-      const hour = new Date(sale.created_at).getHours();
-      hours[hour].count += 1;
+      const date = new Date(sale.created_at);
+      const year = date.getFullYear();
+      const m = date.getMonth();
+      if (year === 2026) months[m].今年 += sale.total;
+      if (year === 2025) months[m].去年 += sale.total;
     });
-    return hours;
+    return months;
   }, [sales]);
 
-  // 30日間の推移データ
-  const chartData = useMemo(() => {
+  const dailyData = useMemo(() => {
     const last30Days = [...Array(30)].map((_, i) => {
       const d = new Date();
       d.setDate(d.getDate() - (29 - i));
-      return d.toLocaleDateString();
+      return d.toLocaleDateString("ja-JP");
     });
     return last30Days.map((dateStr) => {
-      const dayTotal = sales
-        .filter((s) => new Date(s.created_at).toLocaleDateString() === dateStr)
+      const total = sales
+        .filter(
+          (s) => new Date(s.created_at).toLocaleDateString("ja-JP") === dateStr
+        )
         .reduce((sum, s) => sum + s.total, 0);
-      const label = dateStr.split("/").slice(1, 3).join("/");
-      return { name: label, total: dayTotal };
+      return {
+        name: dateStr.split("/").slice(1, 3).join("/"),
+        total,
+        fullDate: dateStr,
+      };
     });
   }, [sales]);
 
-  const monthlyStats = useMemo(() => {
-    const months: { [key: string]: number } = {};
-    sales.forEach((s) => {
-      const month = new Date(s.created_at).toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "short",
-      });
-      months[month] = (months[month] || 0) + s.total;
-    });
-    return Object.entries(months);
-  }, [sales]);
-
-  const toggleDetail = (id: string) => setOpenId(openId === id ? null : id);
-
-  if (loading) {
+  if (loading)
     return (
-      <div className="min-h-screen bg-zinc-50 dark:bg-black flex items-center justify-center text-zinc-500">
-        データを読み込み中...
+      <div className="min-h-screen bg-zinc-50 dark:bg-black flex items-center justify-center font-bold">
+        読み込み中...
       </div>
     );
-  }
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black font-sans text-zinc-900 dark:text-white pb-20">
+    <div className="min-h-screen bg-zinc-50 dark:bg-black font-sans text-zinc-900 dark:text-white pb-20 relative">
       <Header />
-      <main className="max-w-5xl mx-auto p-6">
-        <div className="mb-8 flex justify-between items-end">
+      <main className="max-w-6xl mx-auto p-6">
+        {/* ヘッダーセクション */}
+        <div className="flex flex-wrap justify-between items-center gap-4 mb-8">
           <div>
-            <h1 className="text-3xl font-bold">売上ダッシュボード</h1>
-            <p className="text-zinc-500 text-sm">クラウド同期済み</p>
+            <h1 className="text-3xl font-black italic tracking-tighter uppercase">
+              売上データ分析
+            </h1>
+            <p className="text-zinc-500 text-sm font-bold">
+              2026年 経営ダッシュボード
+            </p>
           </div>
-          <button
-            onClick={fetchSales}
-            className="text-xs bg-zinc-200 dark:bg-zinc-800 px-4 py-2 rounded-full font-bold hover:bg-zinc-300 transition-colors"
-          >
-            データを更新
-          </button>
+          <input
+            type="date"
+            className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-4 py-2 rounded-2xl text-sm font-bold shadow-sm"
+            onChange={(e) =>
+              e.target.value &&
+              setSelectedDate(
+                new Date(e.target.value).toLocaleDateString("ja-JP")
+              )
+            }
+          />
         </div>
 
         {/* サマリーカード */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-          <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800">
-            <p className="text-sm font-bold text-zinc-400 uppercase tracking-widest">
-              Revenue Today
+          <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border-2 border-blue-500 shadow-xl">
+            <p className="text-xs font-bold text-blue-500 mb-1">
+              {selectedDate === todayStr ? "今日" : selectedDate} の売上額
             </p>
-            <p className="text-4xl font-black text-blue-600 mt-2">
-              ¥{todayStats.revenue.toLocaleString()}
-            </p>
-          </div>
-          <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800">
-            <p className="text-sm font-bold text-zinc-400 uppercase tracking-widest">
-              Customers
-            </p>
-            <p className="text-4xl font-black text-emerald-500 mt-2">
-              {todayStats.count} <span className="text-lg">人</span>
+            <p className="text-4xl font-black italic">
+              ¥{selectedDayStats.revenue.toLocaleString()}
             </p>
           </div>
-          <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800">
-            <p className="text-sm font-bold text-zinc-400 uppercase tracking-widest">
-              Average spend
+          <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+            <p className="text-xs font-bold text-zinc-400 mb-1">来客数</p>
+            <p className="text-4xl font-black text-emerald-500">
+              {selectedDayStats.count}{" "}
+              <span className="text-sm font-bold">人</span>
             </p>
-            <p className="text-4xl font-black text-purple-500 mt-2">
-              ¥{todayStats.average.toLocaleString()}
+          </div>
+          <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+            <p className="text-xs font-bold text-zinc-400 mb-1">客単価</p>
+            <p className="text-4xl font-black text-purple-500">
+              ¥{selectedDayStats.average.toLocaleString()}
             </p>
           </div>
         </div>
 
-        {/* グラフエリア */}
-        <div className="flex flex-col gap-8 mb-10">
-          {/* 売上推移グラフ */}
-          <section className="bg-white dark:bg-zinc-900 p-8 rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800">
-            <h2 className="text-lg font-bold mb-6 flex items-center gap-2">
-              <span className="w-2 h-6 bg-blue-600 rounded-full"></span>
-              売上推移 (直近30日間)
-            </h2>
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    stroke="#f3f4f6"
-                  />
-                  <XAxis
-                    dataKey="name"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 10 }}
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 10, fill: "#9ca3af" }}
-                  />
-                  <Tooltip
-                    cursor={{ fill: "#f8fafc" }}
-                    contentStyle={{
-                      borderRadius: "16px",
-                      border: "none",
-                      boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)",
-                    }}
-                  />
-                  <Bar dataKey="total" fill="#2563eb" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <section className="lg:col-span-1 space-y-8">
+            {/* 時間帯別グラフ：XAxisのマージンとフォントサイズを調整 */}
+            <div>
+              <h2 className="text-xs font-bold text-zinc-400 mb-4 uppercase tracking-widest">
+                時間帯別 来店数 (0-23)
+              </h2>
+              <div className="h-[200px] w-full bg-white dark:bg-zinc-900 p-4 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={hourlyData}
+                    margin={{ top: 10, right: 10, left: -35, bottom: 0 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      stroke="#f3f4f6"
+                    />
+                    <XAxis
+                      dataKey="hour"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 7, fill: "#9ca3af" }}
+                      interval={0}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 7, fill: "#9ca3af" }}
+                    />
+                    <Tooltip
+                      cursor={{ fill: "#f0fdf4" }}
+                      labelFormatter={(v) => `${v}時`}
+                    />
+                    <Bar
+                      dataKey="count"
+                      fill="#10b981"
+                      radius={[2, 2, 0, 0]}
+                      onClick={(data) =>
+                        setSelectedHourDetail({
+                          hour: `${data.hour}時`,
+                          sales: daySales.filter(
+                            (s) =>
+                              new Date(s.created_at).getHours() === data.rawHour
+                          ),
+                        })
+                      }
+                      style={{ cursor: "pointer" }}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
-          </section>
 
-          {/* 時間帯別来店数グラフ（ここを復活させました！） */}
-          <section className="bg-white dark:bg-zinc-900 p-8 rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800">
-            <h2 className="text-lg font-bold mb-6 flex items-center gap-2">
-              <span className="w-2 h-6 bg-emerald-500 rounded-full"></span>
-              時間帯別・来店数
-            </h2>
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={hourlyData}>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    stroke="#f3f4f6"
-                  />
-                  <XAxis
-                    dataKey="hour"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 10 }}
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 10, fill: "#9ca3af" }}
-                    allowDecimals={false}
-                  />
-                  <Tooltip
-                    cursor={{ fill: "#f0fdf4" }}
-                    contentStyle={{
-                      borderRadius: "16px",
-                      border: "none",
-                      boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)",
-                    }}
-                  />
-                  <Bar dataKey="count" fill="#10b981" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+            {/* 月別売上比較：余白を左右均等にとり、1月も11月も確実に入れる */}
+            <div>
+              <div className="flex justify-between items-center mb-4 px-1">
+                <h2 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                  月別売上 (2025 vs 2026)
+                </h2>
+                <div className="flex gap-2 text-[8px] font-black">
+                  <span className="text-purple-600">● 2026</span>
+                  <span className="text-zinc-300">● 2025</span>
+                </div>
+              </div>
+              <div className="h-[220px] w-full bg-white dark:bg-zinc-900 p-4 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={monthlyComparisonData}
+                    margin={{ top: 10, right: 10, left: -30, bottom: 0 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      stroke="#f3f4f6"
+                    />
+                    <XAxis
+                      dataKey="month"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 9, fill: "#9ca3af" }}
+                      interval={0}
+                      padding={{ left: 10, right: 10 }} // ここで1月の「はみ出し」を防止
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 8, fill: "#9ca3af" }}
+                    />
+                    <Tooltip labelFormatter={(v) => `${v}月`} />
+                    <Bar
+                      dataKey="去年"
+                      fill="#e4e4e7"
+                      radius={[3, 3, 0, 0]}
+                      barSize={14}
+                    />
+                    <Bar
+                      dataKey="今年"
+                      fill="#a855f7"
+                      radius={[3, 3, 0, 0]}
+                      barSize={8}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
-          </section>
-        </div>
 
-        {/* 月別合計 & 取引履歴 */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-          <div className="lg:col-span-1">
-            <h2 className="text-xl font-bold mb-4">月別合計</h2>
+            {/* 当日の販売内訳 */}
             <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
-              {monthlyStats.length > 0 ? (
-                monthlyStats.map(([month, total]) => (
-                  <div
-                    key={month}
-                    className="p-5 border-b last:border-0 flex justify-between items-center dark:border-zinc-800"
-                  >
-                    <span className="font-bold text-zinc-500">{month}</span>
-                    <span className="font-black text-blue-600 text-lg">
-                      ¥{total.toLocaleString()}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <p className="p-10 text-center text-zinc-400">データなし</p>
-              )}
-            </div>
-          </div>
-
-          <div className="lg:col-span-2">
-            <h2 className="text-xl font-bold mb-4">
-              最近の取引履歴 (Supabase)
-            </h2>
-            <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-              {sales.length === 0 ? (
-                <p className="p-10 text-center text-zinc-400">
-                  取引データがありません
-                </p>
-              ) : (
-                sales.slice(0, 10).map((sale) => (
-                  <div
-                    key={sale.id}
-                    className="border-b dark:border-zinc-800 last:border-0"
-                  >
-                    <button
-                      onClick={() => toggleDetail(sale.id)}
-                      className="w-full p-5 flex justify-between items-center hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              <div className="p-4 border-b dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 flex justify-between">
+                <h2 className="font-bold text-xs uppercase tracking-tighter">
+                  {selectedDate} 内訳
+                </h2>
+              </div>
+              <div className="max-h-[250px] overflow-y-auto">
+                {selectedDayStats.itemAnalysis.length > 0 ? (
+                  selectedDayStats.itemAnalysis.map(([name, info]: any) => (
+                    <div
+                      key={name}
+                      className="p-4 border-b last:border-0 dark:border-zinc-800 flex justify-between items-center"
                     >
-                      <div className="text-left">
-                        <p className="font-bold text-sm">
-                          {new Date(sale.created_at).toLocaleString()}
-                        </p>
-                        <p className="text-xs text-zinc-500 mt-1">
-                          {sale.type} / {sale.items?.length || 0}点
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <p className="font-black text-lg">
-                          ¥{sale.total.toLocaleString()}
-                        </p>
-                        <span
-                          className={`text-zinc-400 transition-transform ${
-                            openId === sale.id ? "rotate-180" : ""
-                          }`}
-                        >
-                          ▼
-                        </span>
-                      </div>
-                    </button>
-                    {openId === sale.id && (
-                      <div className="px-6 pb-6 pt-2 bg-zinc-50/50 dark:bg-zinc-800/30">
-                        <div className="bg-white dark:bg-zinc-900 rounded-2xl p-5 border border-zinc-200 dark:border-zinc-700 shadow-inner">
-                          {sale.items?.map((item: any, idx: number) => (
-                            <div
-                              key={idx}
-                              className="flex justify-between text-sm py-2 border-b last:border-0 border-zinc-100 dark:border-zinc-800"
-                            >
-                              <span className="text-zinc-700 dark:text-zinc-300">
-                                {item.name}
-                              </span>
-                              <span className="font-bold">
-                                ¥{item.price.toLocaleString()}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
+                      <span className="font-bold text-xs">
+                        {info.emoji} {name}
+                      </span>
+                      <span className="font-black text-blue-600">
+                        x{info.count}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="p-8 text-center text-zinc-400 text-[10px] font-bold">
+                    データがありません
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
+          </section>
+
+          {/* 右：30日間売上 & 履歴 */}
+          <section className="lg:col-span-2 space-y-8">
+            <div className="bg-white dark:bg-zinc-900 p-8 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+              <h2 className="text-xs font-bold mb-6 text-zinc-400 uppercase tracking-widest italic font-black">
+                Daily Performance (Last 30 Days)
+              </h2>
+              <div className="h-[320px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={dailyData}
+                    onClick={(data) =>
+                      data?.activePayload &&
+                      setSelectedDate(data.activePayload[0].payload.fullDate)
+                    }
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      stroke="#f3f4f6"
+                    />
+                    <XAxis
+                      dataKey="name"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 9 }}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 9 }}
+                    />
+                    <Tooltip cursor={{ fill: "#f8fafc" }} />
+                    <Bar
+                      dataKey="total"
+                      radius={[6, 6, 0, 0]}
+                      style={{ cursor: "pointer" }}
+                    >
+                      {dailyData.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={
+                            entry.fullDate === selectedDate
+                              ? "#2563eb"
+                              : "#d1d5db"
+                          }
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* 最近の取引リスト */}
+            <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
+              {sales.slice(0, 10).map((sale) => (
+                <div
+                  key={sale.id}
+                  className="border-b last:border-0 dark:border-zinc-800"
+                >
+                  <button
+                    onClick={() =>
+                      setOpenId(openId === sale.id ? null : sale.id)
+                    }
+                    className="w-full p-4 flex justify-between items-center hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                  >
+                    <div className="text-left">
+                      <p className="font-bold text-[10px]">
+                        {new Date(sale.created_at).toLocaleString("ja-JP")}
+                      </p>
+                      <p className="text-[9px] text-zinc-400 font-black uppercase">
+                        SALE / {sale.items?.length || 0} ITEMS
+                      </p>
+                    </div>
+                    <p className="font-black text-sm">
+                      ¥{sale.total.toLocaleString()}
+                    </p>
+                  </button>
+                  {openId === sale.id && (
+                    <div className="px-4 pb-4 animate-in slide-in-from-top-1">
+                      <div className="bg-zinc-50 dark:bg-zinc-800 p-4 rounded-2xl">
+                        {sale.items?.map((item: any, idx: number) => (
+                          <div
+                            key={idx}
+                            className="flex justify-between text-[11px] py-1 border-b last:border-0 border-zinc-200 dark:border-zinc-700"
+                          >
+                            <span>
+                              {item.emoji} {item.name}
+                            </span>
+                            <span className="font-bold">
+                              ¥{item.price.toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
       </main>
+
+      {/* 詳細モーダル */}
+      {selectedHourDetail && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+          <div className="bg-white dark:bg-zinc-900 w-full max-w-md rounded-[40px] p-8 shadow-2xl border border-zinc-200 dark:border-zinc-800">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-black italic">
+                {selectedHourDetail.hour} の内訳
+              </h3>
+              <button
+                onClick={() => setSelectedHourDetail(null)}
+                className="w-10 h-10 bg-zinc-100 dark:bg-zinc-800 rounded-full font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
+              {selectedHourDetail.sales.length > 0 ? (
+                selectedHourDetail.sales.map((sale, i) => (
+                  <div
+                    key={i}
+                    className="p-4 bg-zinc-50 dark:bg-zinc-800 rounded-2xl"
+                  >
+                    <div className="flex justify-between text-[9px] font-black text-blue-600 mb-2">
+                      <span>#ORD-{i + 1}</span>
+                      <span>¥{sale.total.toLocaleString()}</span>
+                    </div>
+                    {sale.items?.map((item: any, j: number) => (
+                      <div key={j} className="text-[11px] flex justify-between">
+                        <span>
+                          {item.emoji} {item.name}
+                        </span>
+                        <span>¥{item.price.toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))
+              ) : (
+                <p className="text-center py-10 text-zinc-400 font-bold italic text-sm">
+                  データなし
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => setSelectedHourDetail(null)}
+              className="w-full mt-6 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 py-4 rounded-2xl font-black active:scale-95 transition-transform"
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
