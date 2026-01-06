@@ -10,6 +10,9 @@ export default function CheckoutPage() {
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("");
 
+  // お釣り計算用のステート
+  const [receivedAmount, setReceivedAmount] = useState<string>("0");
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -19,11 +22,9 @@ export default function CheckoutPage() {
       .from("items")
       .select("*")
       .order("created_at", { ascending: true });
-
     if (items) setMenuItems(items);
 
     const savedCats = localStorage.getItem("shop_categories");
-    // ここもデフォルト値を空にする修正を反映
     const parsedCats = savedCats ? JSON.parse(savedCats) : [];
     setCategories(parsedCats);
     if (parsedCats.length > 0) setSelectedCategory(parsedCats[0]);
@@ -33,30 +34,49 @@ export default function CheckoutPage() {
     (item) => item.category === selectedCategory
   );
 
+  // 金額計算
   const subtotal = cart.reduce((sum, i) => sum + i.price, 0);
   const tax = Math.floor(subtotal * (isTakeout ? 0.08 : 0.1));
   const total = subtotal + tax;
+
+  // お釣り計算
+  const change = Math.max(0, parseInt(receivedAmount) - total);
+
+  // テンキー入力
+  const handleNumberInput = (num: string) => {
+    setReceivedAmount((prev) => {
+      if (prev === "0") return num;
+      if (prev.length > 8) return prev; // 桁数制限
+      return prev + num;
+    });
+  };
+
+  // 注文と入金をすべてリセット
+  const resetAll = () => {
+    setCart([]);
+    setReceivedAmount("0");
+  };
 
   const removeFromCart = (indexToRemove: number) => {
     setCart(cart.filter((_, index) => index !== indexToRemove));
   };
 
   const handleCheckout = async () => {
-    if (cart.length === 0) return;
-    const { error } = await supabase.from("sales").insert([
-      {
-        total: total,
-        tax: tax,
-        type: isTakeout ? "テイクアウト" : "店内",
-        items: cart,
-      },
-    ]);
+    if (cart.length === 0 || parseInt(receivedAmount) < total) {
+      alert("預かり金額が足りません");
+      return;
+    }
+    const { error } = await supabase
+      .from("sales")
+      .insert([
+        { total, tax, type: isTakeout ? "テイクアウト" : "店内", items: cart },
+      ]);
 
     if (error) {
       alert("エラー: " + error.message);
     } else {
-      alert("お会計が完了しました！");
-      setCart([]);
+      alert(`お会計完了！ お釣りは ¥${change.toLocaleString()} です`);
+      resetAll(); // 完了時にリセット
     }
   };
 
@@ -70,9 +90,13 @@ export default function CheckoutPage() {
             <h2 className="text-2xl font-bold">レジ</h2>
             <button
               onClick={() => setIsTakeout(!isTakeout)}
-              className="p-3 px-5 border rounded-2xl bg-white dark:bg-zinc-900 shadow-sm font-bold text-sm"
+              className={`p-3 px-5 border rounded-2xl shadow-sm font-bold text-sm transition-colors ${
+                isTakeout
+                  ? "bg-orange-500 text-white border-orange-600"
+                  : "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-800"
+              }`}
             >
-              {isTakeout ? "🥡 持帰 (8%)" : "🍽️ 店内 (10%)"}
+              {isTakeout ? "🥡 テイクアウト (8%)" : "🍽️ 店内飲食 (10%)"}
             </button>
           </div>
 
@@ -83,7 +107,7 @@ export default function CheckoutPage() {
                 onClick={() => setSelectedCategory(cat)}
                 className={`px-6 py-3 rounded-2xl font-bold whitespace-nowrap transition-all ${
                   selectedCategory === cat
-                    ? "bg-blue-600 text-white"
+                    ? "bg-blue-600 text-white shadow-lg"
                     : "bg-white dark:bg-zinc-900 text-zinc-500 border border-zinc-200 dark:border-zinc-800"
                 }`}
               >
@@ -97,13 +121,13 @@ export default function CheckoutPage() {
               <button
                 key={item.id}
                 onClick={() => setCart([...cart, item])}
-                className="p-4 md:p-6 bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 active:scale-95 transition-all text-left"
+                className="p-4 bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 active:scale-95 transition-all text-left group"
               >
-                <p className="text-3xl mb-2">{item.emoji || "🍱"}</p>
-                <p className="font-bold text-sm md:text-base line-clamp-1">
-                  {item.name}
+                <p className="text-3xl mb-2 group-active:scale-110 transition-transform">
+                  {item.emoji || "🍱"}
                 </p>
-                <p className="text-blue-600 font-black text-sm md:text-base">
+                <p className="font-bold text-sm line-clamp-1">{item.name}</p>
+                <p className="text-blue-600 font-black">
                   ¥{item.price.toLocaleString()}
                 </p>
               </button>
@@ -111,71 +135,124 @@ export default function CheckoutPage() {
           </div>
         </div>
 
-        {/* 右側：注文伝票（iPhoneで見えない問題を修正） */}
+        {/* 右側：注文伝票 & お釣り計算 */}
         <div className="flex-1 bg-white dark:bg-zinc-900 rounded-3xl shadow-xl p-5 border border-zinc-200 dark:border-zinc-800 flex flex-col h-fit md:h-[calc(100vh-120px)] md:sticky md:top-24">
           <h2 className="text-xl font-bold border-b pb-4 mb-4 shrink-0">
             現在の注文
           </h2>
 
-          {/* 商品リストエリア：iPhoneでも最小高さを確保し、中身が増えたらスクロールさせる */}
-          <div className="overflow-y-auto space-y-2 pr-2 min-h-[150px] max-h-[300px] md:max-h-full flex-1">
+          {/* 注文リスト */}
+          <div className="overflow-y-auto space-y-1 min-h-[100px] max-h-[180px] md:max-h-full flex-1 mb-4">
             {cart.length > 0 ? (
               cart.map((item, i) => (
                 <div
                   key={i}
                   onClick={() => removeFromCart(i)}
-                  className="flex justify-between items-center text-sm py-3 border-b border-zinc-50 dark:border-zinc-800 cursor-pointer active:bg-red-50 dark:active:bg-red-900/20 px-2 rounded-lg"
+                  className="flex justify-between items-center text-sm py-2 border-b dark:border-zinc-800 cursor-pointer active:bg-red-50 dark:active:bg-red-900/20 px-2 rounded-lg group"
                 >
-                  <div className="flex flex-col">
-                    <span className="font-bold">{item.name}</span>
-                    <span className="text-[10px] text-zinc-400">
-                      #{i + 1} タップで取消
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold">
-                      ¥{item.price.toLocaleString()}
-                    </span>
-                    <span className="text-red-500 text-xs font-bold">✕</span>
-                  </div>
+                  <span className="font-medium text-xs group-hover:text-red-500">
+                    {item.name}
+                  </span>
+                  <span className="font-bold group-hover:text-red-500">
+                    ¥{item.price.toLocaleString()}
+                  </span>
                 </div>
               ))
             ) : (
-              <p className="text-center text-zinc-400 mt-10 text-sm italic">
+              <p className="text-center text-zinc-400 mt-10 text-xs italic">
                 商品を選択してください
               </p>
             )}
           </div>
 
-          {/* 金額・ボタンエリア：下部に固定 */}
-          <div className="mt-4 pt-4 border-t border-dashed border-zinc-200 dark:border-zinc-700 space-y-3 shrink-0">
-            <div className="flex justify-between text-xs text-zinc-500">
-              <span>小計 (税抜)</span>
-              <span>¥{subtotal.toLocaleString()}</span>
+          {/* 金額計算表示 */}
+          <div className="space-y-2 shrink-0 bg-zinc-50 dark:bg-zinc-800/50 p-4 rounded-2xl border border-zinc-100 dark:border-zinc-800">
+            <div className="flex justify-between text-zinc-500 text-xs">
+              <span>合計金額</span>
+              <span className="font-bold">¥{total.toLocaleString()}</span>
             </div>
-            <div className="flex justify-between text-xs text-zinc-500">
-              <span>消費税 ({isTakeout ? "8%" : "10%"})</span>
-              <span>¥{tax.toLocaleString()}</span>
+            <div className="flex justify-between items-end border-b border-zinc-200 dark:border-zinc-700 pb-2">
+              <span className="text-xs text-zinc-500">お預かり</span>
+              <span className="text-2xl font-black">
+                ¥{parseInt(receivedAmount).toLocaleString()}
+              </span>
             </div>
-            <div className="flex justify-between font-black text-2xl pt-1">
-              <span>合計</span>
-              <span className="text-blue-600">¥{total.toLocaleString()}</span>
-            </div>
-
-            <button
-              onClick={handleCheckout}
-              disabled={cart.length === 0}
-              className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold text-lg disabled:bg-zinc-100 dark:disabled:bg-zinc-800 transition-all mt-2 active:scale-95"
+            <div
+              className={`flex justify-between items-end pt-1 ${
+                change > 0 ? "text-orange-600" : "text-zinc-400"
+              }`}
             >
-              決済を確定
+              <span className="text-xs font-bold">お釣り</span>
+              <span className="text-3xl font-black">
+                ¥{change.toLocaleString()}
+              </span>
+            </div>
+          </div>
+
+          {/* クイック入力ボタン */}
+          <div className="grid grid-cols-4 gap-2 mt-4 shrink-0">
+            <button
+              onClick={() => setReceivedAmount(total.toString())}
+              className="text-[10px] font-bold py-2 bg-blue-50 text-blue-600 rounded-lg border border-blue-100 active:bg-blue-100"
+            >
+              ちょうど
             </button>
             <button
-              onClick={() => setCart([])}
-              className="w-full text-zinc-400 text-[10px] mt-1 underline"
+              onClick={() => setReceivedAmount("1000")}
+              className="text-[10px] font-bold py-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg active:bg-zinc-200"
             >
-              注文をすべてクリア
+              1,000
+            </button>
+            <button
+              onClick={() => setReceivedAmount("5000")}
+              className="text-[10px] font-bold py-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg active:bg-zinc-200"
+            >
+              5,000
+            </button>
+            <button
+              onClick={() => setReceivedAmount("10000")}
+              className="text-[10px] font-bold py-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg active:bg-zinc-200"
+            >
+              10,000
             </button>
           </div>
+
+          {/* テンキー */}
+          <div className="grid grid-cols-3 gap-2 mt-2 shrink-0">
+            {["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "00"].map(
+              (n) => (
+                <button
+                  key={n}
+                  onClick={() => handleNumberInput(n)}
+                  className="py-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl font-bold active:bg-zinc-200 dark:active:bg-zinc-700"
+                >
+                  {n}
+                </button>
+              )
+            )}
+            <button
+              onClick={() => setReceivedAmount("0")}
+              className="py-3 bg-red-50 text-red-500 rounded-xl font-bold active:bg-red-100"
+            >
+              C
+            </button>
+          </div>
+
+          {/* 決済ボタン */}
+          <button
+            onClick={handleCheckout}
+            disabled={cart.length === 0 || parseInt(receivedAmount) < total}
+            className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold text-lg disabled:bg-zinc-100 dark:disabled:bg-zinc-800 mt-4 active:scale-95 transition-all shadow-lg"
+          >
+            決済を確定
+          </button>
+
+          <button
+            onClick={resetAll}
+            className="w-full text-zinc-400 text-[10px] mt-3 underline hover:text-red-500 transition-colors"
+          >
+            注文をすべてクリア
+          </button>
         </div>
       </main>
     </div>
