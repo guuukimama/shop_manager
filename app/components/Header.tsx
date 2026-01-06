@@ -32,7 +32,7 @@ export default function Home() {
           </li>
           <li>
             <Link href="/stats" className="hover:text-blue-600">
-              統計
+              売上
             </Link>
           </li>
           <li>

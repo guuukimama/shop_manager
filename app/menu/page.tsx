@@ -84,7 +84,7 @@ export default function MenuManagementPage() {
         >
           <input
             type="text"
-            className="w-14 p-3 border rounded-xl dark:bg-zinc-800 dark:border-zinc-700 text-center text-xl"
+            className="w-14 p-3 border rounded-xl dark:bg-zinc-800 dark:border-zinc-700 text-center text-xl shadow-inner"
             value={newEmoji}
             onChange={(e) => setNewEmoji(e.target.value)}
           />
@@ -115,7 +115,7 @@ export default function MenuManagementPage() {
           </select>
           <button
             type="submit"
-            className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700"
+            className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-md"
           >
             登録する
           </button>
@@ -139,7 +139,7 @@ export default function MenuManagementPage() {
         </div>
 
         {/* 商品リスト */}
-        <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+        <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
           {items
             .filter((i) => i.category === activeCategory)
             .map((item) => (
@@ -147,17 +147,26 @@ export default function MenuManagementPage() {
                 key={item.id}
                 className="p-5 border-b last:border-0 dark:border-zinc-800 flex justify-between items-center group"
               >
-                <div className="flex items-center gap-4 flex-1">
-                  <span className="text-3xl bg-zinc-100 dark:bg-zinc-800 w-12 h-12 flex items-center justify-center rounded-2xl">
-                    {item.emoji}
-                  </span>
-
-                  {editingId === item.id ? (
-                    /* 編集モード */
-                    <div className="flex flex-wrap gap-2 flex-1">
+                {editingId === item.id ? (
+                  /* 編集モード */
+                  <div className="flex flex-wrap gap-4 flex-1 items-center">
+                    <input
+                      className="w-14 h-14 border rounded-xl dark:bg-zinc-800 dark:border-zinc-700 text-center text-2xl shadow-inner outline-none focus:ring-2 focus:ring-blue-500"
+                      value={item.emoji}
+                      onChange={(e) =>
+                        setItems(
+                          items.map((i) =>
+                            i.id === item.id
+                              ? { ...i, emoji: e.target.value }
+                              : i
+                          )
+                        )
+                      }
+                    />
+                    <div className="flex flex-col gap-2 flex-1 min-w-[200px]">
                       <input
                         autoFocus
-                        className="border p-2 rounded-lg dark:bg-zinc-800 text-sm"
+                        className="border p-2 rounded-lg dark:bg-zinc-800 dark:border-zinc-700 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"
                         value={item.name}
                         onChange={(e) =>
                           setItems(
@@ -169,28 +178,37 @@ export default function MenuManagementPage() {
                           )
                         }
                       />
-                      <input
-                        type="number"
-                        className="border p-2 rounded-lg dark:bg-zinc-800 text-sm w-24"
-                        value={item.price}
-                        onChange={(e) =>
-                          setItems(
-                            items.map((i) =>
-                              i.id === item.id
-                                ? { ...i, price: parseInt(e.target.value) }
-                                : i
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-zinc-400">¥</span>
+                        <input
+                          type="number"
+                          className="border p-2 rounded-lg dark:bg-zinc-800 dark:border-zinc-700 text-sm w-28 font-mono outline-none focus:ring-2 focus:ring-blue-500"
+                          value={item.price}
+                          onChange={(e) =>
+                            setItems(
+                              items.map((i) =>
+                                i.id === item.id
+                                  ? {
+                                      ...i,
+                                      price: parseInt(e.target.value) || 0,
+                                    }
+                                  : i
+                              )
                             )
-                          )
-                        }
-                      />
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2">
                       <button
                         onClick={() =>
                           updateItem(item.id, {
                             name: item.name,
                             price: item.price,
+                            emoji: item.emoji,
                           })
                         }
-                        className="bg-emerald-500 text-white px-3 py-1 rounded-lg text-xs font-bold"
+                        className="bg-emerald-500 text-white px-5 py-2 rounded-xl text-xs font-bold shadow-sm hover:bg-emerald-600 transition-colors"
                       >
                         保存
                       </button>
@@ -199,38 +217,58 @@ export default function MenuManagementPage() {
                           setEditingId(null);
                           fetchItems();
                         }}
-                        className="bg-zinc-200 dark:bg-zinc-700 px-3 py-1 rounded-lg text-xs font-bold"
+                        className="bg-zinc-100 dark:bg-zinc-800 text-zinc-500 px-5 py-2 rounded-xl text-xs font-bold hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
                       >
-                        キャンセル
+                        戻る
                       </button>
                     </div>
-                  ) : (
-                    /* 通常表示モード */
+                  </div>
+                ) : (
+                  /* 通常表示モード */
+                  <>
                     <div
-                      className="flex-1 cursor-pointer"
+                      className="flex items-center gap-4 flex-1 cursor-pointer"
                       onClick={() => setEditingId(item.id)}
                     >
-                      <p className="font-bold flex items-center gap-2">
-                        {item.name}
-                        <span className="text-[10px] text-zinc-400 font-normal opacity-0 group-hover:opacity-100 transition-opacity">
-                          クリックで編集
-                        </span>
-                      </p>
-                      <p className="text-sm font-black text-blue-600">
-                        ¥{item.price.toLocaleString()}
-                      </p>
+                      <span className="text-3xl bg-zinc-100 dark:bg-zinc-800 w-14 h-14 flex items-center justify-center rounded-2xl shadow-sm group-hover:scale-105 transition-transform">
+                        {item.emoji}
+                      </span>
+                      <div className="flex-1">
+                        <p className="font-bold flex items-center gap-2">
+                          {item.name}
+                          <span className="text-[10px] text-zinc-400 font-normal opacity-0 group-hover:opacity-100 transition-opacity">
+                            クリックで編集
+                          </span>
+                        </p>
+                        <p className="text-sm font-black text-blue-600">
+                          ¥{item.price.toLocaleString()}
+                        </p>
+                      </div>
                     </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => deleteItem(item.id)}
-                    className="text-zinc-400 hover:text-red-500 text-xs font-bold"
-                  >
-                    削除する
-                  </button>
-                </div>
+                    <div className="flex items-center gap-4">
+                      <button
+                        onClick={() => deleteItem(item.id)}
+                        className="text-zinc-300 hover:text-red-500 transition-colors p-2"
+                        title="削除"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-5 w-5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             ))}
         </div>

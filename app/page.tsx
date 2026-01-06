@@ -99,7 +99,7 @@ export default function Home() {
           {/* 売上カード */}
           <div className="p-8 bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800">
             <h2 className="text-sm font-bold text-blue-600 uppercase tracking-widest">
-              Today's Sales
+              本日の総売上額
             </h2>
             <p className="text-5xl font-black mt-4">
               ¥{todaySales.toLocaleString()}
@@ -112,7 +112,7 @@ export default function Home() {
           {/* 客数カード */}
           <div className="p-8 bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800">
             <h2 className="text-sm font-bold text-orange-500 uppercase tracking-widest">
-              Customers
+              来店数
             </h2>
             <p className="text-5xl font-black mt-4">
               {customerCount} <span className="text-2xl">件</span>
@@ -125,7 +125,7 @@ export default function Home() {
           {/* 人気メニュー */}
           <div className="p-8 bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800">
             <h2 className="text-sm font-bold text-purple-600 uppercase tracking-widest">
-              Top Item
+              本日の人気メニュー
             </h2>
             <p className="text-3xl font-bold mt-4 break-words leading-tight">
               {topItem}

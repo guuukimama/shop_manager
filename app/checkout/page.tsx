@@ -1,14 +1,12 @@
 "use client";
 import { useState, useEffect } from "react";
 import Header from "../components/Header";
-import { supabase } from "@/lib/supabaseClient"; // Supabaseクライアントをインポート
+import { supabase } from "@/lib/supabaseClient";
 
 export default function CheckoutPage() {
   const [menuItems, setMenuItems] = useState<any[]>([]);
   const [cart, setCart] = useState<any[]>([]);
   const [isTakeout, setIsTakeout] = useState(false);
-
-  // 動的カテゴリー
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("");
 
@@ -16,9 +14,7 @@ export default function CheckoutPage() {
     fetchData();
   }, []);
 
-  // 1. DBからデータを一括取得
   const fetchData = async () => {
-    // メニューの取得
     const { data: items, error: itemError } = await supabase
       .from("items")
       .select("*")
@@ -26,7 +22,6 @@ export default function CheckoutPage() {
 
     if (items) setMenuItems(items);
 
-    // カテゴリーの取得（※一旦既存のロジックを継承。必要に応じてDB化も可能）
     const savedCats = localStorage.getItem("shop_categories");
     const parsedCats = savedCats
       ? JSON.parse(savedCats)
@@ -43,7 +38,11 @@ export default function CheckoutPage() {
   const tax = Math.floor(subtotal * (isTakeout ? 0.08 : 0.1));
   const total = subtotal + tax;
 
-  // 2. 会計処理（Supabaseに保存）
+  // --- 【追加】1点削除する関数 ---
+  const removeFromCart = (indexToRemove: number) => {
+    setCart(cart.filter((_, index) => index !== indexToRemove));
+  };
+
   const handleCheckout = async () => {
     if (cart.length === 0) return;
 
@@ -52,15 +51,14 @@ export default function CheckoutPage() {
         total: total,
         tax: tax,
         type: isTakeout ? "テイクアウト" : "店内",
-        items: cart, // JSONB形式でそのまま保存されます
-        // created_at はDB側で自動付与されます
+        items: cart,
       },
     ]);
 
     if (error) {
-      alert("会計の保存に失敗しました: " + error.message);
+      alert("お会計は完了していません: " + error.message);
     } else {
-      alert("会計完了！クラウドDBに保存されました。");
+      alert("お会計が完了しました！");
       setCart([]);
     }
   };
@@ -81,7 +79,6 @@ export default function CheckoutPage() {
             </button>
           </div>
 
-          {/* カテゴリータブ */}
           <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 scrollbar-hide">
             {categories.map((cat) => (
               <button
@@ -98,7 +95,6 @@ export default function CheckoutPage() {
             ))}
           </div>
 
-          {/* 商品一覧 */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {filteredItems.length > 0 ? (
               filteredItems.map((item) => (
@@ -124,24 +120,43 @@ export default function CheckoutPage() {
           </div>
         </div>
 
-        {/* 右側：伝票セクション */}
+        {/* 右側：伝票セクション（ここをタップ削除可能に修正） */}
         <div className="flex-1 bg-white dark:bg-zinc-900 rounded-3xl shadow-xl p-6 flex flex-col h-[650px] sticky top-24 border border-zinc-200 dark:border-zinc-800">
           <h2 className="text-xl font-bold border-b pb-4 mb-4">現在の注文</h2>
+
           <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-            {cart.map((item, i) => (
-              <div
-                key={i}
-                className="flex justify-between items-center text-sm py-2 border-b border-zinc-50 dark:border-zinc-800"
-              >
-                <div className="flex flex-col">
-                  <span className="font-medium">{item.name}</span>
-                  <span className="text-[10px] text-zinc-400">#{i + 1}</span>
+            {cart.length > 0 ? (
+              cart.map((item, i) => (
+                <div
+                  key={i}
+                  // タップでその商品だけ削除
+                  onClick={() => removeFromCart(i)}
+                  className="flex justify-between items-center text-sm py-2 border-b border-zinc-50 dark:border-zinc-800 cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20 group transition-colors px-2 rounded-lg"
+                  title="タップで削除"
+                >
+                  <div className="flex flex-col">
+                    <span className="font-medium group-hover:text-red-500 transition-colors">
+                      {item.name}
+                    </span>
+                    <span className="text-[10px] text-zinc-400">
+                      #{i + 1} タップで取消
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold group-hover:text-red-500">
+                      ¥{item.price.toLocaleString()}
+                    </span>
+                    <span className="text-zinc-300 group-hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all text-xs">
+                      ✕
+                    </span>
+                  </div>
                 </div>
-                <span className="font-bold">
-                  ¥{item.price.toLocaleString()}
-                </span>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-center text-zinc-400 mt-10 text-sm italic">
+                商品を選択してください
+              </p>
+            )}
           </div>
 
           <div className="mt-6 pt-6 border-t border-dashed border-zinc-200 dark:border-zinc-700 space-y-3">
@@ -167,7 +182,7 @@ export default function CheckoutPage() {
             </button>
             <button
               onClick={() => setCart([])}
-              className="w-full text-zinc-400 text-xs mt-2 hover:text-red-400 transition-colors"
+              className="w-full text-zinc-400 text-xs mt-2 hover:text-red-400 transition-colors underline underline-offset-4"
             >
               注文をすべてクリア
             </button>
