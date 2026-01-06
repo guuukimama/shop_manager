@@ -2,8 +2,9 @@
 import { useState, useEffect } from "react";
 import Header from "../components/Header";
 import styles from "../page.module.css";
+import { supabase } from "@/lib/supabaseClient"; // Supabaseをインポート
 
-// --- 追加: ドラッグ&ドロップ用のインポート ---
+// --- ドラッグ&ドロップ用のインポート ---
 import {
   DndContext,
   closestCenter,
@@ -22,7 +23,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-// --- 追加: 各カテゴリーアイテムのコンポーネント ---
+// --- 各カテゴリーアイテムのコンポーネント ---
 function SortableItem({
   id,
   onRemove,
@@ -57,7 +58,6 @@ function SortableItem({
         {...attributes}
         {...listeners}
       >
-        {/* ドラッグ用ハンドル */}
         <span className="text-zinc-400">☰</span>
         <span className="dark:text-white">{id}</span>
       </div>
@@ -76,33 +76,50 @@ export default function SettingsPage() {
   const [categories, setCategories] = useState<string[]>([]);
   const [newCat, setNewCat] = useState("");
 
-  // ドラッグ操作のセンサー設定
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   useEffect(() => {
+    // ショップ名の読み込み
     const savedName = localStorage.getItem("shop_config_name");
-    const savedCategories = localStorage.getItem("shop_categories");
     if (savedName) setShopName(savedName);
-    if (savedCategories) {
-      setCategories(JSON.parse(savedCategories));
-    } else {
-      const defaultCats = ["メイン", "サイド", "ドリンク", "デザート"];
-      setCategories(defaultCats);
-      localStorage.setItem("shop_categories", JSON.stringify(defaultCats));
-    }
+
+    // カテゴリーの読み込み（DB同期版）
+    syncCategories();
   }, []);
 
-  // ドラッグ終了時の処理
+  // DBの商品データとlocalStorageを合体させて同期する関数
+  async function syncCategories() {
+    // 1. DBから今使われているカテゴリーを取得
+    const { data, error } = await supabase.from("items").select("category");
+    const dbCats = data ? data.map((item: any) => item.category) : [];
+
+    // 2. localStorage から保存された並び順を取得
+    const savedCats = localStorage.getItem("shop_categories");
+    const parsedCats = savedCats
+      ? JSON.parse(savedCats)
+      : ["メイン", "サイド", "ドリンク", "デザート"];
+
+    // 3. 重複を排除して合体
+    const allUniqueCats = Array.from(new Set([...parsedCats, ...dbCats]));
+
+    setCategories(allUniqueCats);
+    // 最新の状態を一旦保存しておく
+    localStorage.setItem("shop_categories", JSON.stringify(allUniqueCats));
+  }
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
       setCategories((items) => {
         const oldIndex = items.indexOf(active.id as string);
         const newIndex = items.indexOf(over.id as string);
-        return arrayMove(items, oldIndex, newIndex);
+        const result = arrayMove(items, oldIndex, newIndex);
+        // 並び替えたらすぐにlocalStorageに反映（保存ボタン忘れ対策）
+        localStorage.setItem("shop_categories", JSON.stringify(result));
+        return result;
       });
     }
   };
@@ -110,12 +127,16 @@ export default function SettingsPage() {
   const handleSave = () => {
     localStorage.setItem("shop_config_name", shopName);
     localStorage.setItem("shop_categories", JSON.stringify(categories));
-    alert("設定と並び順を保存しました！");
+    alert("設定を保存しました！");
     window.location.reload();
   };
 
   const resetAllData = () => {
-    if (confirm("すべてのデータを削除しますか？")) {
+    if (
+      confirm(
+        "すべてのデータを削除しますか？（DBの商品データは削除されません）"
+      )
+    ) {
       localStorage.clear();
       alert("初期化しました。");
       window.location.reload();
@@ -124,12 +145,16 @@ export default function SettingsPage() {
 
   const addCategory = () => {
     if (!newCat || categories.includes(newCat)) return;
-    setCategories([...categories, newCat]);
+    const updated = [...categories, newCat];
+    setCategories(updated);
+    localStorage.setItem("shop_categories", JSON.stringify(updated));
     setNewCat("");
   };
 
   const removeCategory = (cat: string) => {
-    setCategories(categories.filter((c) => c !== cat));
+    const updated = categories.filter((c) => c !== cat);
+    setCategories(updated);
+    localStorage.setItem("shop_categories", JSON.stringify(updated));
   };
 
   return (
@@ -146,7 +171,6 @@ export default function SettingsPage() {
         </header>
 
         <div className="space-y-6">
-          {/* 一般設定 */}
           <section className="bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800 p-6">
             <h2 className="text-lg font-bold mb-4">一般設定</h2>
             <div className="flex flex-col gap-2">
@@ -162,7 +186,6 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          {/* ドラッグ可能なカテゴリー管理 */}
           <section className="bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800 p-6">
             <h2 className="text-lg font-bold mb-2">メニューカテゴリー設定</h2>
             <p className="text-xs text-zinc-400 mb-6">
@@ -207,21 +230,22 @@ export default function SettingsPage() {
             </DndContext>
           </section>
 
-          {/* メンテナンス */}
           <section className="bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-red-100 dark:border-red-900/30 p-6">
             <h2 className="text-lg font-bold text-red-600 mb-4">
               メンテナンス
             </h2>
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-bold">データの初期化</p>
-                <p className="text-sm text-zinc-500">すべて消去します。</p>
+                <p className="font-bold">設定の初期化</p>
+                <p className="text-sm text-zinc-500">
+                  ショップ名とカテゴリー順をリセットします。
+                </p>
               </div>
               <button
                 onClick={resetAllData}
-                className="bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-xl text-sm font-bold hover:bg-red-600 hover:text-white transition-all"
+                className="bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-xl text-sm font-bold"
               >
-                初期化を実行
+                初期化
               </button>
             </div>
           </section>
@@ -229,7 +253,7 @@ export default function SettingsPage() {
           <div className="flex justify-end pt-4">
             <button
               onClick={handleSave}
-              className="bg-zinc-900 dark:bg-white dark:text-black text-white px-10 py-4 rounded-2xl font-bold hover:scale-[1.02] active:scale-95 transition-all shadow-lg"
+              className="bg-zinc-900 dark:bg-white dark:text-black text-white px-10 py-4 rounded-2xl font-bold shadow-lg transition-transform active:scale-95"
             >
               設定を保存する
             </button>

@@ -13,17 +13,9 @@ export default function MenuManagementPage() {
   const [activeCategory, setActiveCategory] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // 初回読み込み
   useEffect(() => {
     fetchItems();
-    const savedCats = localStorage.getItem("shop_categories");
-    const parsedCats = savedCats
-      ? JSON.parse(savedCats)
-      : ["メイン", "サイド", "ドリンク", "デザート"];
-    setCategories(parsedCats);
-    if (parsedCats.length > 0) {
-      setActiveCategory(parsedCats[0]);
-      setNewCategory(parsedCats[0]);
-    }
   }, []);
 
   async function fetchItems() {
@@ -31,10 +23,36 @@ export default function MenuManagementPage() {
       .from("items")
       .select("*")
       .order("created_at", { ascending: true });
-    if (!error) setItems(data || []);
+
+    if (!error && data) {
+      setItems(data);
+
+      // --- カテゴリーの自動同期ロジック ---
+      // 1. デフォルトのカテゴリー
+      const defaultCats = ["メイン", "サイド", "ドリンク", "デザート"];
+
+      // 2. ブラウザに保存されているカテゴリー（もしあれば）
+      const savedCats = localStorage.getItem("shop_categories");
+      const parsedCats = savedCats ? JSON.parse(savedCats) : defaultCats;
+
+      // 3. DBの全商品が持っているカテゴリーを抽出
+      const dbCats = data.map((item: any) => item.category);
+
+      // 1, 2, 3 をすべて合体させて重複を排除（Setを使用）
+      const allUniqueCats: string[] = Array.from(
+        new Set([...parsedCats, ...dbCats])
+      );
+
+      setCategories(allUniqueCats);
+
+      // 表示するタブが未設定なら最初のものをセット
+      if (!activeCategory && allUniqueCats.length > 0) {
+        setActiveCategory(allUniqueCats[0]);
+        setNewCategory(allUniqueCats[0]);
+      }
+    }
   }
 
-  // --- 追加 ---
   const addItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName || !newPrice) return;
@@ -53,7 +71,6 @@ export default function MenuManagementPage() {
     }
   };
 
-  // --- 更新 (編集) ---
   const updateItem = async (id: string, updates: any) => {
     const { error } = await supabase.from("items").update(updates).eq("id", id);
     if (!error) {
@@ -64,7 +81,6 @@ export default function MenuManagementPage() {
     }
   };
 
-  // --- 削除 ---
   const deleteItem = async (id: string) => {
     if (!confirm("この商品を削除してもよろしいですか？")) return;
     const { error } = await supabase.from("items").delete().eq("id", id);
@@ -121,7 +137,7 @@ export default function MenuManagementPage() {
           </button>
         </form>
 
-        {/* カテゴリー切り替え */}
+        {/* カテゴリー切り替えタブ */}
         <div className="flex flex-wrap gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
           {categories.map((cat) => (
             <button
@@ -148,7 +164,6 @@ export default function MenuManagementPage() {
                 className="p-5 border-b last:border-0 dark:border-zinc-800 flex justify-between items-center group"
               >
                 {editingId === item.id ? (
-                  /* 編集モード */
                   <div className="flex flex-wrap gap-4 flex-1 items-center">
                     <input
                       className="w-14 h-14 border rounded-xl dark:bg-zinc-800 dark:border-zinc-700 text-center text-2xl shadow-inner outline-none focus:ring-2 focus:ring-blue-500"
@@ -166,7 +181,7 @@ export default function MenuManagementPage() {
                     <div className="flex flex-col gap-2 flex-1 min-w-[200px]">
                       <input
                         autoFocus
-                        className="border p-2 rounded-lg dark:bg-zinc-800 dark:border-zinc-700 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                        className="border p-2 rounded-lg dark:bg-zinc-800 dark:border-zinc-700 text-sm font-bold outline-none"
                         value={item.name}
                         onChange={(e) =>
                           setItems(
@@ -178,11 +193,11 @@ export default function MenuManagementPage() {
                           )
                         }
                       />
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap gap-2 items-center">
                         <span className="text-sm text-zinc-400">¥</span>
                         <input
                           type="number"
-                          className="border p-2 rounded-lg dark:bg-zinc-800 dark:border-zinc-700 text-sm w-28 font-mono outline-none focus:ring-2 focus:ring-blue-500"
+                          className="border p-2 rounded-lg dark:bg-zinc-800 text-sm w-24 font-mono"
                           value={item.price}
                           onChange={(e) =>
                             setItems(
@@ -197,6 +212,25 @@ export default function MenuManagementPage() {
                             )
                           }
                         />
+                        <select
+                          className="border p-2 rounded-lg dark:bg-zinc-800 text-xs font-bold"
+                          value={item.category}
+                          onChange={(e) =>
+                            setItems(
+                              items.map((i) =>
+                                i.id === item.id
+                                  ? { ...i, category: e.target.value }
+                                  : i
+                              )
+                            )
+                          }
+                        >
+                          {categories.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
                     <div className="flex flex-col gap-2">
@@ -206,9 +240,10 @@ export default function MenuManagementPage() {
                             name: item.name,
                             price: item.price,
                             emoji: item.emoji,
+                            category: item.category,
                           })
                         }
-                        className="bg-emerald-500 text-white px-5 py-2 rounded-xl text-xs font-bold shadow-sm hover:bg-emerald-600 transition-colors"
+                        className="bg-emerald-500 text-white px-5 py-2 rounded-xl text-xs font-bold"
                       >
                         保存
                       </button>
@@ -217,56 +252,47 @@ export default function MenuManagementPage() {
                           setEditingId(null);
                           fetchItems();
                         }}
-                        className="bg-zinc-100 dark:bg-zinc-800 text-zinc-500 px-5 py-2 rounded-xl text-xs font-bold hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                        className="text-xs text-zinc-400"
                       >
                         戻る
                       </button>
                     </div>
                   </div>
                 ) : (
-                  /* 通常表示モード */
                   <>
                     <div
                       className="flex items-center gap-4 flex-1 cursor-pointer"
                       onClick={() => setEditingId(item.id)}
                     >
-                      <span className="text-3xl bg-zinc-100 dark:bg-zinc-800 w-14 h-14 flex items-center justify-center rounded-2xl shadow-sm group-hover:scale-105 transition-transform">
+                      <span className="text-3xl bg-zinc-100 dark:bg-zinc-800 w-14 h-14 flex items-center justify-center rounded-2xl shadow-sm">
                         {item.emoji}
                       </span>
                       <div className="flex-1">
-                        <p className="font-bold flex items-center gap-2">
-                          {item.name}
-                          <span className="text-[10px] text-zinc-400 font-normal opacity-0 group-hover:opacity-100 transition-opacity">
-                            クリックで編集
-                          </span>
-                        </p>
+                        <p className="font-bold">{item.name}</p>
                         <p className="text-sm font-black text-blue-600">
                           ¥{item.price.toLocaleString()}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <button
-                        onClick={() => deleteItem(item.id)}
-                        className="text-zinc-300 hover:text-red-500 transition-colors p-2"
-                        title="削除"
+                    <button
+                      onClick={() => deleteItem(item.id)}
+                      className="text-zinc-300 hover:text-red-500 p-2"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
                       >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-5 w-5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                          />
-                        </svg>
-                      </button>
-                    </div>
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                        />
+                      </svg>
+                    </button>
                   </>
                 )}
               </div>
